@@ -1,5 +1,5 @@
 const std = @import("std");
-const Farbe = @import("farbe").Farbe;
+const farbe = @import("farbe");
 
 pub fn main() !void {
     var gpa = std.heap.GeneralPurposeAllocator(.{}){};
@@ -20,13 +20,32 @@ pub fn main() !void {
         try std.io.getStdErr().writeAll("Too many arguments. Expected 3.\n");
         std.os.exit(1);
     }
-    var color = Farbe.init(allocator);
+    var color = farbe.Farbe.init(allocator);
     defer color.deinit();
-    try color.fgRgb(r, g, b);
 
+    try color.fgRgb(r, g, b);
     var stdout = std.io.getStdOut().writer();
     try stdout.print("R {} G {} B {}\n", .{ r, g, b });
     try color.write(stdout, "██", .{});
+    try stdout.writeAll(" ");
+    try color.write(stdout, "Sample Text", .{});
+
+    try color.italic();
+    try stdout.writeAll(" ");
+    try color.write(stdout, "Sample Text", .{});
+
+    try color.pop();
+
+    try color.bold();
+    try stdout.writeAll(" ");
+    try color.write(stdout, "Sample Text", .{});
+
+    try color.pop();
+
+    try color.underlined();
+    try stdout.writeAll(" ");
+    try color.write(stdout, "Sample Text", .{});
+
     try stdout.writeAll("\n");
 
     std.os.exit(0);
