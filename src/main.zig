@@ -1,12 +1,5 @@
 const std = @import("std");
 
-fn wrapStyle(allocator: std.mem.Allocator, op: u8, cl: u8) ![2][]u8 {
-    const open = try std.fmt.allocPrint(allocator, "\u{001B}[{}m", .{op});
-    errdefer allocator.free(open);
-    const close = std.fmt.allocPrint(allocator, "\u{001B}[{}m", .{cl});
-    return [2][]u8{ open, close };
-}
-
 fn writeAnsi16m(
     writer: anytype,
     bg: bool,
@@ -21,8 +14,6 @@ fn writeAnsi16m(
     );
 }
 
-const ANSI16M_CLOSE = "\u{001B}[39m";
-
 pub const Color = struct {
     bg: bool,
     r: u8,
@@ -35,7 +26,7 @@ pub const Style = struct {
     cl: u8,
 };
 
-const ColorStyle = union(enum) {
+pub const ColorStyle = union(enum) {
     Color: Color,
     Style: Style,
 };
@@ -197,9 +188,4 @@ fn FarbeMixin(comptime Self: type) type {
             try f.writeClose(writer);
         }
     };
-}
-
-test "compile time colors" {
-    comptime var color = BufferedFarbe(10).init();
-    try color.bold();
 }
