@@ -4,13 +4,19 @@ pub fn build(b: *std.Build) void {
     const target = b.standardTargetOptions(.{});
     const optimize = b.standardOptimizeOption(.{});
 
+    const farbe_module = b.addModule(
+        "farbe",
+        .{ .source_file = .{ .path = "src/main.zig" } },
+    );
+
     const exe = b.addExecutable(.{
         .name = "farbe",
-        .root_source_file = .{ .path = "src/main.zig" },
+        .root_source_file = .{ .path = "src/exe.zig" },
         .target = target,
         .optimize = optimize,
     });
 
+    exe.addModule("farbe", farbe_module);
     b.installArtifact(exe);
 
     const run_cmd = b.addRunArtifact(exe);
