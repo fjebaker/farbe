@@ -8,12 +8,15 @@ fn formatAnsi(
     r: u8,
     g: u8,
     b: u8,
-) []const u8 {
+) [20]u8 {
     const bg_int: u8 = if (bg) BACKGROUND_CODE else FOREGROUND_CODE;
-    return std.fmt.comptimePrint(
-        "\u{001B}[{};2;{};{};{}m",
+    var buf: [20]u8 = undefined;
+    _ = std.fmt.bufPrint(
+        &buf,
+        "\u{001B}[{d:0>2};2;{d:0>3};{d:0>3};{d:0>3}m",
         .{ bg_int, r, g, b },
-    );
+    ) catch unreachable;
+    return buf;
 }
 
 fn writeAnsi(
@@ -23,11 +26,7 @@ fn writeAnsi(
     g: u8,
     b: u8,
 ) !void {
-    const bg_int: u8 = if (bg) BACKGROUND_CODE else FOREGROUND_CODE;
-    try writer.print(
-        "\u{001B}[{};2;{};{};{}m",
-        .{ bg_int, r, g, b },
-    );
+    try writer.writeAll(&formatAnsi(bg, r, g, b));
 }
 
 pub const Color = struct {
@@ -110,11 +109,20 @@ pub const ComptimeFarbe = struct {
         try writer.writeAll(f.close);
     }
 
+    pub fn runtime(f: ComptimeFarbe, allocator: std.mem.Allocator) Farbe {
+        var color = Farbe.init(allocator);
+        color.prefix = f.open;
+        color.suffix = f.close;
+        return color;
+    }
+
     pub usingnamespace StyleMixin(ComptimeFarbe, false);
     pub usingnamespace OuputMixin(ComptimeFarbe);
 };
 
 pub const Farbe = struct {
+    prefix: ?[]const u8 = null,
+    suffix: ?[]const u8 = null,
     stack: std.ArrayList(ColorStyle),
     pub fn init(allocator: std.mem.Allocator) Farbe {
         return .{
@@ -150,6 +158,7 @@ pub const Farbe = struct {
     }
 
     pub fn writeOpen(f: Farbe, writer: anytype) !void {
+        if (f.prefix) |prefix| try writer.writeAll(prefix);
         const items = f.stack.items;
         for (items) |cs| {
             switch (cs) {
@@ -171,6 +180,7 @@ pub const Farbe = struct {
                 .Style => |s| try writer.print("\u{001B}[{}m", .{s.cl}),
             }
         }
+        if (f.suffix) |suffix| try writer.writeAll(suffix);
     }
 
     pub usingnamespace StyleMixin(Farbe, true);
@@ -182,7 +192,7 @@ fn StyleMixin(comptime Self: type, comptime Mutable: bool) type {
     const WithTry = @typeInfo(RetType) == .ErrorUnion;
     const MaybeMutSelf = if (Mutable) *Self else Self;
     return struct {
-        fn styleWrapper(f: MaybeMutSelf, comptime s: Style) RetType {
+        fn styleWrapper(f: MaybeMutSelf, s: Style) RetType {
             if (WithTry) {
                 return try f.style(s);
             } else {
@@ -283,6 +293,29 @@ test "runtime" {
     try farb.bold();
 
     const opener = try farb.open(std.testing.allocator);
+    defer std.testing.allocator.free(opener);
+
+    try std.testing.expectEqualSlices(u8, &.{
+        0x1B,
+        0x5B,
+        0x33,
+        0x6D,
+        0x1B,
+        0x5B,
+        0x31,
+        0x6D,
+    }, opener);
+}
+
+test "comptime to runtime" {
+    const farb = comptime ComptimeFarbe.init();
+
+    var farb_runtime = farb.runtime(std.testing.allocator);
+    defer farb_runtime.deinit();
+    try farb_runtime.italic();
+    try farb_runtime.bold();
+
+    const opener = try farb_runtime.open(std.testing.allocator);
     defer std.testing.allocator.free(opener);
 
     try std.testing.expectEqualSlices(u8, &.{
