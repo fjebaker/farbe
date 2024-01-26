@@ -116,6 +116,13 @@ pub const ComptimeFarbe = struct {
         return color;
     }
 
+    pub fn fixed(f: ComptimeFarbe) Farbe {
+        var color = Farbe.initFixed();
+        color.prefix = f.open;
+        color.suffix = f.close;
+        return color;
+    }
+
     pub usingnamespace StyleMixin(ComptimeFarbe, false);
     pub usingnamespace OuputMixin(ComptimeFarbe);
 };
@@ -123,24 +130,37 @@ pub const ComptimeFarbe = struct {
 pub const Farbe = struct {
     prefix: ?[]const u8 = null,
     suffix: ?[]const u8 = null,
-    stack: std.ArrayList(ColorStyle),
+    stack: ?std.ArrayList(ColorStyle),
+
+    pub const Error = error{NoStack};
+
     pub fn init(allocator: std.mem.Allocator) Farbe {
         return .{
             .stack = std.ArrayList(ColorStyle).init(allocator),
         };
     }
 
+    pub fn initFixed() Farbe {
+        return .{ .stack = null };
+    }
+
     pub fn deinit(f: *Farbe) void {
-        f.stack.deinit();
+        if (f.stack) |stack| {
+            stack.deinit();
+        }
         f.* = undefined;
     }
 
     pub fn pop(f: *Farbe) !void {
-        _ = f.stack.pop();
+        if (f.stack) |*stack| {
+            _ = stack.pop();
+        } else return Error.NoStack;
     }
 
     pub fn push(f: *Farbe, cs: ColorStyle) !void {
-        try f.stack.append(cs);
+        if (f.stack) |*stack| {
+            try stack.append(cs);
+        } else return Error.NoStack;
     }
 
     pub fn bgRgb(f: *Farbe, r: u8, g: u8, b: u8) !void {
@@ -159,25 +179,29 @@ pub const Farbe = struct {
 
     pub fn writeOpen(f: Farbe, writer: anytype) !void {
         if (f.prefix) |prefix| try writer.writeAll(prefix);
-        const items = f.stack.items;
-        for (items) |cs| {
-            switch (cs) {
-                .Color => |c| try writeAnsi(writer, c.bg, c.r, c.g, c.b),
-                .Style => |s| try writer.print("\u{001B}[{}m", .{s.op}),
+        if (f.stack) |stack| {
+            const items = stack.items;
+            for (items) |cs| {
+                switch (cs) {
+                    .Color => |c| try writeAnsi(writer, c.bg, c.r, c.g, c.b),
+                    .Style => |s| try writer.print("\u{001B}[{}m", .{s.op}),
+                }
             }
         }
     }
 
     pub fn writeClose(f: Farbe, writer: anytype) !void {
-        const items = f.stack.items;
-        const end = items.len;
-        for (1..end) |i| {
-            const cs = items[end - i];
-            switch (cs) {
-                .Color => |c| try writer.writeAll(
-                    if (c.bg) "\u{001B}[49m" else "\u{001B}[39m",
-                ),
-                .Style => |s| try writer.print("\u{001B}[{}m", .{s.cl}),
+        if (f.stack) |stack| {
+            const items = stack.items;
+            const end = items.len;
+            for (1..end) |i| {
+                const cs = items[end - i];
+                switch (cs) {
+                    .Color => |c| try writer.writeAll(
+                        if (c.bg) "\u{001B}[49m" else "\u{001B}[39m",
+                    ),
+                    .Style => |s| try writer.print("\u{001B}[{}m", .{s.cl}),
+                }
             }
         }
         if (f.suffix) |suffix| try writer.writeAll(suffix);
@@ -314,4 +338,21 @@ test "comptime to runtime" {
     try std.testing.expectEqualSlices(u8, &.{
         0x1B, 0x5B, 0x33, 0x6D, 0x1B, 0x5B, 0x31, 0x6D,
     }, opener);
+}
+
+test "comptime to fixed" {
+    const farb = comptime ComptimeFarbe.init().italic().bold();
+
+    var farb_runtime = farb.fixed();
+    defer farb_runtime.deinit();
+
+    const opener = try farb_runtime.open(std.testing.allocator);
+    defer std.testing.allocator.free(opener);
+
+    try std.testing.expectEqualSlices(u8, &.{
+        0x1B, 0x5B, 0x33, 0x6D, 0x1B, 0x5B, 0x31, 0x6D,
+    }, opener);
+
+    const outcome = farb_runtime.dim() catch |err| err;
+    try std.testing.expectEqual(outcome, Farbe.Error.NoStack);
 }
