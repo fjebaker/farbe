@@ -66,7 +66,7 @@ pub const ComptimeFarbe = struct {
     pub inline fn push(f: ComptimeFarbe, comptime cs: ColorStyle) ComptimeFarbe {
         switch (cs) {
             .Color => |c| {
-                const end = if (cs.bg) "\u{001B}[49m" else "\u{001B}[39m";
+                const end = if (c.bg) "\u{001B}[49m" else "\u{001B}[39m";
                 comptime return .{
                     .open = f.open ++ formatAnsi(c.bg, c.r, c.g, c.b),
                     .close = f.open ++ end,
