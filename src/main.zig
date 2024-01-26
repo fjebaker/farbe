@@ -274,15 +274,15 @@ fn OuputMixin(comptime Self: type) type {
 test "comptime" {
     const farb = comptime ComptimeFarbe.init().italic().bold();
     try std.testing.expectEqualSlices(u8, &.{
-        0x1B,
-        0x5B,
-        0x33,
-        0x6D,
-        0x1B,
-        0x5B,
-        0x31,
-        0x6D,
+        0x1B, 0x5B, 0x33, 0x6D, 0x1B, 0x5B, 0x31, 0x6D,
     }, farb.open);
+
+    const farb2 = comptime ComptimeFarbe.init().fgRgb(255, 0, 0);
+    try std.testing.expectEqualSlices(u8, &.{
+        0x1B, 0x5B, 0x33, 0x38, 0x3B, 0x32, 0x3B, 0x32,
+        0x35, 0x35, 0x3B, 0x30, 0x30, 0x30, 0x3B, 0x30,
+        0x30, 0x30, 0x6D, 0x00,
+    }, farb2.open);
 }
 
 test "runtime" {
@@ -296,14 +296,7 @@ test "runtime" {
     defer std.testing.allocator.free(opener);
 
     try std.testing.expectEqualSlices(u8, &.{
-        0x1B,
-        0x5B,
-        0x33,
-        0x6D,
-        0x1B,
-        0x5B,
-        0x31,
-        0x6D,
+        0x1B, 0x5B, 0x33, 0x6D, 0x1B, 0x5B, 0x31, 0x6D,
     }, opener);
 }
 
@@ -319,13 +312,6 @@ test "comptime to runtime" {
     defer std.testing.allocator.free(opener);
 
     try std.testing.expectEqualSlices(u8, &.{
-        0x1B,
-        0x5B,
-        0x33,
-        0x6D,
-        0x1B,
-        0x5B,
-        0x31,
-        0x6D,
+        0x1B, 0x5B, 0x33, 0x6D, 0x1B, 0x5B, 0x31, 0x6D,
     }, opener);
 }
