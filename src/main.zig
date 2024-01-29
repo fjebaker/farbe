@@ -204,7 +204,8 @@ pub const Farbe = struct {
         if (f.stack) |stack| {
             const items = stack.items;
             const end = items.len;
-            for (1..end) |i| {
+            for (0..end) |index| {
+                const i = index + 1;
                 const cs = items[end - i];
                 switch (cs) {
                     .Color => |c| try writer.writeAll(
