@@ -87,18 +87,28 @@ pub const ComptimeFarbe = struct {
         }
     }
 
-    pub inline fn bgRgb(f: ComptimeFarbe, r: u8, g: u8, b: u8) ComptimeFarbe {
+    pub inline fn bgRgb(
+        comptime f: ComptimeFarbe,
+        comptime r: u8,
+        comptime g: u8,
+        comptime b: u8,
+    ) ComptimeFarbe {
         const color: Color = .{ .bg = true, .r = r, .g = g, .b = b };
-        return f.push(.{ .Color = color });
+        comptime return f.push(.{ .Color = color });
     }
 
-    pub inline fn fgRgb(f: ComptimeFarbe, r: u8, g: u8, b: u8) ComptimeFarbe {
+    pub inline fn fgRgb(
+        comptime f: ComptimeFarbe,
+        comptime r: u8,
+        comptime g: u8,
+        comptime b: u8,
+    ) ComptimeFarbe {
         const color: Color = .{ .bg = false, .r = r, .g = g, .b = b };
-        return f.push(.{ .Color = color });
+        comptime return f.push(.{ .Color = color });
     }
 
-    pub inline fn style(f: ComptimeFarbe, s: Style) ComptimeFarbe {
-        return f.push(.{ .Style = s });
+    pub inline fn style(comptime f: ComptimeFarbe, comptime s: Style) ComptimeFarbe {
+        comptime return f.push(.{ .Style = s });
     }
 
     pub fn writeOpen(f: ComptimeFarbe, writer: anytype) !void {
@@ -216,7 +226,7 @@ fn StyleMixin(comptime Self: type, comptime Mutable: bool) type {
     const WithTry = @typeInfo(RetType) == .ErrorUnion;
     const MaybeMutSelf = if (Mutable) *Self else Self;
     return struct {
-        fn styleWrapper(f: MaybeMutSelf, s: Style) RetType {
+        inline fn styleWrapper(f: MaybeMutSelf, s: Style) RetType {
             if (WithTry) {
                 return try f.style(s);
             } else {
@@ -224,39 +234,39 @@ fn StyleMixin(comptime Self: type, comptime Mutable: bool) type {
             }
         }
 
-        pub fn reset(f: MaybeMutSelf) RetType {
+        pub inline fn reset(f: MaybeMutSelf) RetType {
             return styleWrapper(f, Style.RESET);
         }
 
-        pub fn bold(f: MaybeMutSelf) RetType {
+        pub inline fn bold(f: MaybeMutSelf) RetType {
             return styleWrapper(f, Style.BOLD);
         }
 
-        pub fn dim(f: MaybeMutSelf) RetType {
+        pub inline fn dim(f: MaybeMutSelf) RetType {
             return styleWrapper(f, Style.DIM);
         }
 
-        pub fn italic(f: MaybeMutSelf) RetType {
+        pub inline fn italic(f: MaybeMutSelf) RetType {
             return styleWrapper(f, Style.ITALIC);
         }
 
-        pub fn underlined(f: MaybeMutSelf) RetType {
+        pub inline fn underlined(f: MaybeMutSelf) RetType {
             return styleWrapper(f, Style.UNDERLINED);
         }
 
-        pub fn inverse(f: MaybeMutSelf) RetType {
+        pub inline fn inverse(f: MaybeMutSelf) RetType {
             return styleWrapper(f, Style.INVERSE);
         }
 
-        pub fn hidden(f: MaybeMutSelf) RetType {
+        pub inline fn hidden(f: MaybeMutSelf) RetType {
             return styleWrapper(f, Style.HIDDEN);
         }
 
-        pub fn strikethrough(f: MaybeMutSelf) RetType {
+        pub inline fn strikethrough(f: MaybeMutSelf) RetType {
             return styleWrapper(f, Style.STRIKETHROUGH);
         }
 
-        pub fn overline(f: MaybeMutSelf) RetType {
+        pub inline fn overline(f: MaybeMutSelf) RetType {
             return styleWrapper(f, Style.OVERLINE);
         }
     };
