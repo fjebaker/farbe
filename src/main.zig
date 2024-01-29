@@ -69,7 +69,7 @@ pub const ComptimeFarbe = struct {
                 const end = if (c.bg) "\u{001B}[49m" else "\u{001B}[39m";
                 comptime return .{
                     .open = f.open ++ formatAnsi(c.bg, c.r, c.g, c.b),
-                    .close = f.open ++ end,
+                    .close = end ++ f.close,
                 };
             },
             .Style => |s| {
@@ -78,10 +78,10 @@ pub const ComptimeFarbe = struct {
                         "\u{001B}[{}m",
                         .{s.op},
                     ),
-                    .close = f.close ++ std.fmt.comptimePrint(
+                    .close = std.fmt.comptimePrint(
                         "\u{001B}[{}m",
                         .{s.cl},
-                    ),
+                    ) ++ f.close,
                 };
             },
         }
