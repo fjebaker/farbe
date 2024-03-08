@@ -4,31 +4,35 @@ pub fn build(b: *std.Build) void {
     const target = b.standardTargetOptions(.{});
     const optimize = b.standardOptimizeOption(.{});
 
+    const build_exe = b.option(bool, "exe", "Build the development exe.") orelse false;
+    const build_picker = b.option(bool, "picker", "Build the colour picker utility executible.") orelse false;
+
     const farbe_module = b.addModule(
         "farbe",
-        .{ .source_file = .{ .path = "src/main.zig" } },
+        .{ .root_source_file = .{ .path = "src/main.zig" } },
     );
 
-    const exe = b.addExecutable(.{
-        .name = "farbe",
-        .root_source_file = .{ .path = "src/exe.zig" },
-        .target = target,
-        .optimize = optimize,
-    });
-
-    exe.addModule("farbe", farbe_module);
-    b.installArtifact(exe);
-
-    const run_cmd = b.addRunArtifact(exe);
-
-    run_cmd.step.dependOn(b.getInstallStep());
-
-    if (b.args) |args| {
-        run_cmd.addArgs(args);
+    if (build_exe) {
+        const exe = b.addExecutable(.{
+            .name = "farbe-exe",
+            .root_source_file = .{ .path = "src/exe.zig" },
+            .target = target,
+            .optimize = optimize,
+        });
+        exe.root_module.addImport("farbe", farbe_module);
+        b.installArtifact(exe);
     }
 
-    const run_step = b.step("run", "Run the app");
-    run_step.dependOn(&run_cmd.step);
+    if (build_picker) {
+        const picker = b.addExecutable(.{
+            .name = "picker",
+            .root_source_file = .{ .path = "src/picker.zig" },
+            .target = target,
+            .optimize = optimize,
+        });
+        picker.root_module.addImport("farbe", farbe_module);
+        b.installArtifact(picker);
+    }
 
     const unit_tests = b.addTest(.{
         .root_source_file = .{ .path = "src/main.zig" },

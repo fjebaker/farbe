@@ -278,7 +278,7 @@ fn OuputMixin(comptime Self: type) type {
         /// Caller owns memory.
         pub fn open(f: Self, allocator: std.mem.Allocator) ![]const u8 {
             var buf = std.ArrayList(u8).init(allocator);
-            var writer = buf.writer();
+            const writer = buf.writer();
             try f.writeOpen(writer);
             return buf.toOwnedSlice();
         }
@@ -286,7 +286,7 @@ fn OuputMixin(comptime Self: type) type {
         /// Caller owns memory.
         pub fn close(f: Self, allocator: std.mem.Allocator) ![]const u8 {
             var buf = std.ArrayList(u8).init(allocator);
-            var writer = buf.writer();
+            const writer = buf.writer();
             try f.writeclose(writer);
             return buf.toOwnedSlice();
         }
@@ -356,6 +356,24 @@ test "comptime to runtime" {
     try std.testing.expectEqualSlices(u8, &.{
         0x1B, 0x5B, 0x33, 0x6D, 0x1B, 0x5B, 0x31, 0x6D,
     }, opener);
+}
+
+test "writing" {
+    var list = std.ArrayList(u8).init(std.testing.allocator);
+    defer list.deinit();
+
+    var farb = Farbe.init(std.testing.allocator);
+    defer farb.deinit();
+
+    try farb.italic();
+    try farb.bold();
+
+    try farb.write(list.writer(), "{s}", .{"test"});
+    try std.testing.expectEqualSlices(u8, &.{
+        0x1B, 0x5B, 0x33, 0x6D, 0x1B, 0x5B, 0x31, 0x6D,
+        0x74, 0x65, 0x73, 0x74, 0x1B, 0x5B, 0x32, 0x32,
+        0x6D,
+    }, list.items);
 }
 
 test "comptime to fixed" {
