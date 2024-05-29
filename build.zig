@@ -9,13 +9,13 @@ pub fn build(b: *std.Build) void {
 
     const farbe_module = b.addModule(
         "farbe",
-        .{ .root_source_file = .{ .path = "src/main.zig" } },
+        .{ .root_source_file = b.path("src/main.zig") },
     );
 
     if (build_exe) {
         const exe = b.addExecutable(.{
             .name = "farbe-exe",
-            .root_source_file = .{ .path = "src/exe.zig" },
+            .root_source_file = b.path("src/exe.zig"),
             .target = target,
             .optimize = optimize,
         });
@@ -26,7 +26,7 @@ pub fn build(b: *std.Build) void {
     if (build_picker) {
         const picker = b.addExecutable(.{
             .name = "picker",
-            .root_source_file = .{ .path = "src/picker.zig" },
+            .root_source_file = b.path("src/picker.zig"),
             .target = target,
             .optimize = optimize,
         });
@@ -35,7 +35,7 @@ pub fn build(b: *std.Build) void {
     }
 
     const unit_tests = b.addTest(.{
-        .root_source_file = .{ .path = "src/main.zig" },
+        .root_source_file = b.path("src/main.zig"),
         .target = target,
         .optimize = optimize,
     });
