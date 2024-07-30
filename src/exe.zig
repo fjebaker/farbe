@@ -1,38 +1,29 @@
 const std = @import("std");
 const farbe = @import("farbe");
 
-fn colorTest(
-    alloc: std.mem.Allocator,
-) !void {
+fn colorTest() !void {
     var writer = std.io.getStdOut().writer();
 
     try writer.writeAll("Comptime Color Test\n");
     {
-        const c1 = farbe.ComptimeFarbe.init().bgRgb(255, 0, 0).fgRgb(0, 255, 255).fixed();
+        const c1 = farbe.Farbe.init().bgRgb(255, 0, 0).fgRgb(0, 255, 255);
         try c1.write(writer, "Bg Red Fg Cyan", .{});
     }
     try writer.writeAll(" Reset\n");
     {
-        const c1 = farbe.ComptimeFarbe.init().bgRgb(255, 255, 255).fgRgb(0, 0, 0).underlined().fixed();
+        const c1 = farbe.Farbe.init().bgRgb(255, 255, 255).fgRgb(0, 0, 0).underlined();
         try c1.write(writer, "Bg White Fb Black Underlined", .{});
     }
     try writer.writeAll(" Reset\n");
 
     try writer.writeAll("Runtime Color Test\n");
     {
-        var c1 = farbe.Farbe.init(alloc);
-        defer c1.deinit();
-        try c1.bgRgb(255, 0, 0);
-        try c1.fgRgb(0, 255, 255);
+        var c1 = farbe.Farbe.init().bgRgb(255, 0, 0).fgRgb(0, 255, 255);
         try c1.write(writer, "Bg Red Fg Cyan", .{});
     }
     try writer.writeAll(" Reset\n");
     {
-        var c1 = farbe.Farbe.init(alloc);
-        defer c1.deinit();
-        try c1.bgRgb(255, 255, 255);
-        try c1.fgRgb(0, 0, 0);
-        try c1.underlined();
+        var c1 = farbe.Farbe.init().bgRgb(255, 255, 255).fgRgb(0, 0, 0).underlined();
         try c1.write(writer, "Bg White Fb Black Underlined", .{});
     }
     try writer.writeAll(" Reset\n");
@@ -52,7 +43,7 @@ pub fn main() !void {
     // are there ary args?
     const maybe_arg = args.next();
     const r_string = maybe_arg orelse {
-        try colorTest(allocator);
+        try colorTest();
         std.process.exit(0);
     };
 
@@ -62,35 +53,34 @@ pub fn main() !void {
 
     if (args.next()) |_| {
         try std.io.getStdErr().writeAll("Too many arguments. Expected 3.\n");
-        std.os.exit(1);
+        std.process.exit(1);
     }
-    var color = farbe.Farbe.init(allocator);
-    defer color.deinit();
+    var color = farbe.Farbe.init();
 
-    try color.fgRgb(r, g, b);
+    color = color.fgRgb(r, g, b);
     var stdout = std.io.getStdOut().writer();
     try stdout.print("R {} G {} B {}\n", .{ r, g, b });
     try color.write(stdout, "██", .{});
     try stdout.writeAll(" ");
     try color.write(stdout, "Sample Text", .{});
 
-    try color.italic();
+    color = color.italic();
     try stdout.writeAll(" ");
     try color.write(stdout, "Sample Text", .{});
 
-    try color.pop();
+    color.style.italic = false;
 
-    try color.bold();
+    color = color.bold();
     try stdout.writeAll(" ");
     try color.write(stdout, "Sample Text", .{});
 
-    try color.pop();
+    color.style.bold = false;
 
-    try color.underlined();
+    color = color.underlined();
     try stdout.writeAll(" ");
     try color.write(stdout, "Sample Text", .{});
 
     try stdout.writeAll("\n");
 
-    std.os.exit(0);
+    std.process.exit(0);
 }

@@ -8,9 +8,9 @@ fn formatAnsi(
     r: u8,
     g: u8,
     b: u8,
-) [20]u8 {
+) [19]u8 {
     const bg_int: u8 = if (bg) BACKGROUND_CODE else FOREGROUND_CODE;
-    var buf: [20]u8 = undefined;
+    var buf: [19]u8 = undefined;
     _ = std.fmt.bufPrint(
         &buf,
         "\u{001B}[{d:0>2};2;{d:0>3};{d:0>3};{d:0>3}m",
@@ -30,24 +30,38 @@ fn writeAnsi(
 }
 
 pub const Color = struct {
-    bg: bool,
     r: u8,
     g: u8,
     b: u8,
 };
 
-pub const Style = struct {
+pub const AnsiStyleFormat = struct {
     op: u8,
     cl: u8,
-    pub const RESET = Style{ .op = 0, .cl = 0 };
-    pub const BOLD = Style{ .op = 1, .cl = 22 };
-    pub const DIM = Style{ .op = 2, .cl = 22 };
-    pub const ITALIC = Style{ .op = 3, .cl = 23 };
-    pub const UNDERLINED = Style{ .op = 4, .cl = 24 };
-    pub const INVERSE = Style{ .op = 7, .cl = 27 };
-    pub const HIDDEN = Style{ .op = 8, .cl = 28 };
-    pub const STRIKETHROUGH = Style{ .op = 9, .cl = 29 };
-    pub const OVERLINE = Style{ .op = 53, .cl = 55 };
+};
+
+const AnsiStyleFormatMap = std.StaticStringMap(AnsiStyleFormat).initComptime(&.{
+    .{ "reset", AnsiStyleFormat{ .op = 0, .cl = 0 } },
+    .{ "bold", AnsiStyleFormat{ .op = 1, .cl = 22 } },
+    .{ "dim", AnsiStyleFormat{ .op = 2, .cl = 22 } },
+    .{ "italic", AnsiStyleFormat{ .op = 3, .cl = 23 } },
+    .{ "underlined", AnsiStyleFormat{ .op = 4, .cl = 24 } },
+    .{ "inverse", AnsiStyleFormat{ .op = 7, .cl = 27 } },
+    .{ "hidden", AnsiStyleFormat{ .op = 8, .cl = 28 } },
+    .{ "strikethrough", AnsiStyleFormat{ .op = 9, .cl = 29 } },
+    .{ "overline", AnsiStyleFormat{ .op = 53, .cl = 55 } },
+});
+
+pub const Style = struct {
+    reset: bool = false,
+    bold: bool = false,
+    dim: bool = false,
+    italic: bool = false,
+    underlined: bool = false,
+    inverse: bool = false,
+    hidden: bool = false,
+    strikethrough: bool = false,
+    overline: bool = false,
 };
 
 pub const ColorStyle = union(enum) {
@@ -55,219 +69,118 @@ pub const ColorStyle = union(enum) {
     Style: Style,
 };
 
-pub const ComptimeFarbe = struct {
-    open: []const u8 = "",
-    close: []const u8 = "",
-
-    pub inline fn init() ComptimeFarbe {
-        comptime return .{};
-    }
-
-    pub inline fn push(f: ComptimeFarbe, comptime cs: ColorStyle) ComptimeFarbe {
-        switch (cs) {
-            .Color => |c| {
-                const end = if (c.bg) "\u{001B}[49m" else "\u{001B}[39m";
-                comptime return .{
-                    .open = f.open ++ formatAnsi(c.bg, c.r, c.g, c.b),
-                    .close = end ++ f.close,
-                };
-            },
-            .Style => |s| {
-                comptime return .{
-                    .open = f.open ++ std.fmt.comptimePrint(
-                        "\u{001B}[{}m",
-                        .{s.op},
-                    ),
-                    .close = std.fmt.comptimePrint(
-                        "\u{001B}[{}m",
-                        .{s.cl},
-                    ) ++ f.close,
-                };
-            },
-        }
-    }
-
-    pub inline fn bgRgb(
-        comptime f: ComptimeFarbe,
-        comptime r: u8,
-        comptime g: u8,
-        comptime b: u8,
-    ) ComptimeFarbe {
-        const color: Color = .{ .bg = true, .r = r, .g = g, .b = b };
-        comptime return f.push(.{ .Color = color });
-    }
-
-    pub inline fn fgRgb(
-        comptime f: ComptimeFarbe,
-        comptime r: u8,
-        comptime g: u8,
-        comptime b: u8,
-    ) ComptimeFarbe {
-        const color: Color = .{ .bg = false, .r = r, .g = g, .b = b };
-        comptime return f.push(.{ .Color = color });
-    }
-
-    pub inline fn style(comptime f: ComptimeFarbe, comptime s: Style) ComptimeFarbe {
-        comptime return f.push(.{ .Style = s });
-    }
-
-    pub fn writeOpen(f: ComptimeFarbe, writer: anytype) !void {
-        try writer.writeAll(f.open);
-    }
-
-    pub fn writeClose(f: ComptimeFarbe, writer: anytype) !void {
-        try writer.writeAll(f.close);
-    }
-
-    pub fn runtime(f: ComptimeFarbe, allocator: std.mem.Allocator) Farbe {
-        var color = Farbe.init(allocator);
-        color.prefix = f.open;
-        color.suffix = f.close;
-        return color;
-    }
-
-    pub fn fixed(f: ComptimeFarbe) Farbe {
-        var color = Farbe.initFixed();
-        color.prefix = f.open;
-        color.suffix = f.close;
-        return color;
-    }
-
-    pub usingnamespace StyleMixin(ComptimeFarbe, false);
-    pub usingnamespace OuputMixin(ComptimeFarbe);
-};
-
 pub const Farbe = struct {
-    prefix: ?[]const u8 = null,
-    suffix: ?[]const u8 = null,
-    stack: ?std.ArrayList(ColorStyle),
+    fg: ?Color = null,
+    bg: ?Color = null,
+    style: Style = .{},
 
-    pub const Error = error{NoStack};
-
-    pub fn init(allocator: std.mem.Allocator) Farbe {
-        return .{
-            .stack = std.ArrayList(ColorStyle).init(allocator),
-        };
+    pub fn init() Farbe {
+        return .{};
     }
 
-    pub fn initFixed() Farbe {
-        return .{ .stack = null };
+    pub fn bgRgb(f: Farbe, r: u8, g: u8, b: u8) Farbe {
+        var new = f;
+        new.bg = .{ .r = r, .g = g, .b = b };
+        return new;
     }
 
-    pub fn deinit(f: *Farbe) void {
-        if (f.stack) |stack| {
-            stack.deinit();
-        }
-        f.* = undefined;
+    pub fn fgRgb(f: Farbe, r: u8, g: u8, b: u8) Farbe {
+        var new = f;
+        new.fg = .{ .r = r, .g = g, .b = b };
+        return new;
     }
 
-    pub fn pop(f: *Farbe) !void {
-        if (f.stack) |*stack| {
-            _ = stack.pop();
-        } else return Error.NoStack;
-    }
-
-    pub fn push(f: *Farbe, cs: ColorStyle) !void {
-        if (f.stack) |*stack| {
-            try stack.append(cs);
-        } else return Error.NoStack;
-    }
-
-    pub fn bgRgb(f: *Farbe, r: u8, g: u8, b: u8) !void {
-        const color: Color = .{ .bg = true, .r = r, .g = g, .b = b };
-        try f.push(.{ .Color = color });
-    }
-
-    pub fn fgRgb(f: *Farbe, r: u8, g: u8, b: u8) !void {
-        const color: Color = .{ .bg = false, .r = r, .g = g, .b = b };
-        try f.push(.{ .Color = color });
-    }
-
-    pub fn style(f: *Farbe, s: Style) !void {
-        try f.push(.{ .Style = s });
+    pub fn setStyle(f: *Farbe, s: Style) !void {
+        f.style = s;
     }
 
     pub fn writeOpen(f: Farbe, writer: anytype) !void {
-        if (f.prefix) |prefix| try writer.writeAll(prefix);
-        if (f.stack) |stack| {
-            const items = stack.items;
-            for (items) |cs| {
-                switch (cs) {
-                    .Color => |c| try writeAnsi(writer, c.bg, c.r, c.g, c.b),
-                    .Style => |s| try writer.print("\u{001B}[{}m", .{s.op}),
-                }
+        inline for (@typeInfo(Style).Struct.fields) |field| {
+            if (@field(f.style, field.name)) {
+                try writer.print(
+                    "\u{001B}[{d}m",
+                    .{AnsiStyleFormatMap.get(field.name).?.op},
+                );
             }
+        }
+        if (f.bg) |bg| {
+            try writeAnsi(writer, true, bg.r, bg.g, bg.b);
+        }
+        if (f.fg) |fg| {
+            try writeAnsi(writer, false, fg.r, fg.g, fg.b);
         }
     }
 
     pub fn writeClose(f: Farbe, writer: anytype) !void {
-        if (f.stack) |stack| {
-            const items = stack.items;
-            const end = items.len;
-            for (0..end) |index| {
-                const i = index + 1;
-                const cs = items[end - i];
-                switch (cs) {
-                    .Color => |c| try writer.writeAll(
-                        if (c.bg) "\u{001B}[49m" else "\u{001B}[39m",
-                    ),
-                    .Style => |s| try writer.print("\u{001B}[{}m", .{s.cl}),
-                }
+        if (f.fg) |_| {
+            try writer.writeAll("\u{001B}[39m");
+        }
+        if (f.bg) |_| {
+            try writer.writeAll("\u{001B}[49m");
+        }
+        inline for (@typeInfo(Style).Struct.fields) |field| {
+            if (@field(f.style, field.name)) {
+                try writer.print(
+                    "\u{001B}[{d}m",
+                    .{AnsiStyleFormatMap.get(field.name).?.cl},
+                );
+                // only need one closing reset
+                return;
             }
         }
-        if (f.suffix) |suffix| try writer.writeAll(suffix);
     }
 
-    pub usingnamespace StyleMixin(Farbe, true);
+    pub usingnamespace StyleMixin(Farbe);
     pub usingnamespace OuputMixin(Farbe);
 };
 
-fn StyleMixin(comptime Self: type, comptime Mutable: bool) type {
-    const RetType = @typeInfo(@TypeOf(Self.style)).Fn.return_type.?;
-    const WithTry = @typeInfo(RetType) == .ErrorUnion;
-    const MaybeMutSelf = if (Mutable) *Self else Self;
+fn StyleMixin(comptime Self: type) type {
     return struct {
-        inline fn styleWrapper(f: MaybeMutSelf, s: Style) RetType {
-            if (WithTry) {
-                return try f.style(s);
-            } else {
-                return f.style(s);
+        inline fn styleWrapper(f: Self, style: Style) Self {
+            var s: Style = f.style;
+            inline for (@typeInfo(Style).Struct.fields) |field| {
+                @field(s, field.name) =
+                    @field(s, field.name) or @field(style, field.name);
             }
+
+            var new = f;
+            new.style = s;
+            return new;
         }
 
-        pub inline fn reset(f: MaybeMutSelf) RetType {
-            return styleWrapper(f, Style.RESET);
+        pub inline fn reset(f: Self) Self {
+            return styleWrapper(f, .{ .reset = true });
         }
 
-        pub inline fn bold(f: MaybeMutSelf) RetType {
-            return styleWrapper(f, Style.BOLD);
+        pub inline fn bold(f: Self) Self {
+            return styleWrapper(f, .{ .bold = true });
         }
 
-        pub inline fn dim(f: MaybeMutSelf) RetType {
-            return styleWrapper(f, Style.DIM);
+        pub inline fn dim(f: Self) Self {
+            return styleWrapper(f, .{ .dim = true });
         }
 
-        pub inline fn italic(f: MaybeMutSelf) RetType {
-            return styleWrapper(f, Style.ITALIC);
+        pub inline fn italic(f: Self) Self {
+            return styleWrapper(f, .{ .italic = true });
         }
 
-        pub inline fn underlined(f: MaybeMutSelf) RetType {
-            return styleWrapper(f, Style.UNDERLINED);
+        pub inline fn underlined(f: Self) Self {
+            return styleWrapper(f, .{ .underlined = true });
         }
 
-        pub inline fn inverse(f: MaybeMutSelf) RetType {
-            return styleWrapper(f, Style.INVERSE);
+        pub inline fn inverse(f: Self) Self {
+            return styleWrapper(f, .{ .inverse = true });
         }
 
-        pub inline fn hidden(f: MaybeMutSelf) RetType {
-            return styleWrapper(f, Style.HIDDEN);
+        pub inline fn hidden(f: Self) Self {
+            return styleWrapper(f, .{ .hidden = true });
         }
 
-        pub inline fn strikethrough(f: MaybeMutSelf) RetType {
+        pub inline fn strikethrough(f: Self) Self {
             return styleWrapper(f, Style.STRIKETHROUGH);
         }
 
-        pub inline fn overline(f: MaybeMutSelf) RetType {
+        pub inline fn overline(f: Self) Self {
             return styleWrapper(f, Style.OVERLINE);
         }
     };
@@ -306,89 +219,102 @@ fn OuputMixin(comptime Self: type) type {
     };
 }
 
+fn testEqualCode(
+    comptime expected: []const u8,
+    farb: Farbe,
+    what: enum { open, close, full },
+) !void {
+    var buf = std.ArrayList(u8).init(std.testing.allocator);
+    defer buf.deinit();
+
+    try switch (what) {
+        .open => farb.writeOpen(buf.writer()),
+        .close => farb.writeClose(buf.writer()),
+        .full => farb.write(buf.writer(), "", .{}),
+    };
+
+    try std.testing.expectEqualSlices(
+        u8,
+        expected,
+        buf.items,
+    );
+}
+
 test "comptime" {
-    const farb = comptime ComptimeFarbe.init().italic().bold();
-    try std.testing.expectEqualSlices(u8, &.{
-        0x1B, 0x5B, 0x33, 0x6D, 0x1B, 0x5B, 0x31, 0x6D,
-    }, farb.open);
+    const farb = comptime Farbe.init().italic().bold();
+    try testEqualCode(
+        &.{ 0x1B, 0x5B, 0x31, 0x6D, 0x1B, 0x5B, 0x33, 0x6D },
+        farb,
+        .open,
+    );
 
-    const farb2 = comptime ComptimeFarbe.init().fgRgb(255, 0, 0);
-    try std.testing.expectEqualSlices(u8, &.{
-        0x1B, 0x5B, 0x33, 0x38, 0x3B, 0x32, 0x3B, 0x32,
-        0x35, 0x35, 0x3B, 0x30, 0x30, 0x30, 0x3B, 0x30,
-        0x30, 0x30, 0x6D, 0x00,
-    }, farb2.open);
+    const farb2 = comptime Farbe.init().fgRgb(255, 0, 0);
+    try testEqualCode(
+        &.{
+            0x1B, 0x5B, 0x33, 0x38, 0x3B, 0x32, 0x3B, 0x32,
+            0x35, 0x35, 0x3B, 0x30, 0x30, 0x30, 0x3B, 0x30,
+            0x30, 0x30, 0x6D,
+        },
+        farb2,
+        .open,
+    );
 
-    const farb3 = ComptimeFarbe.init().fgRgb(255, 0, 0).bold();
-    try std.testing.expectEqualSlices(u8, &.{
-        0x1B, 0x5B, 0x33, 0x38, 0x3B, 0x32, 0x3B, 0x32,
-        0x35, 0x35, 0x3B, 0x30, 0x30, 0x30, 0x3B, 0x30,
-        0x30, 0x30, 0x6D, 0x00, 0x1B, 0x5B, 0x31, 0x6D,
-    }, farb3.open);
+    const farb3 = Farbe.init().fgRgb(255, 0, 0).bold();
+    try testEqualCode(
+        &.{
+            0x1B, 0x5B, 0x31, 0x6D, 0x1B, 0x5B, 0x33, 0x38,
+            0x3B, 0x32, 0x3B, 0x32, 0x35, 0x35, 0x3B, 0x30,
+            0x30, 0x30, 0x3B, 0x30, 0x30, 0x30, 0x6D,
+        },
+        farb3,
+        .open,
+    );
 }
 
 test "runtime" {
-    var farb = Farbe.init(std.testing.allocator);
-    defer farb.deinit();
-
-    try farb.italic();
-    try farb.bold();
-
-    const opener = try farb.open(std.testing.allocator);
-    defer std.testing.allocator.free(opener);
-
-    try std.testing.expectEqualSlices(u8, &.{
-        0x1B, 0x5B, 0x33, 0x6D, 0x1B, 0x5B, 0x31, 0x6D,
-    }, opener);
+    const farb = Farbe.init().italic().bold();
+    try testEqualCode(
+        &.{ 0x1B, 0x5B, 0x31, 0x6D, 0x1B, 0x5B, 0x33, 0x6D },
+        farb,
+        .open,
+    );
 }
 
 test "comptime to runtime" {
-    const farb = comptime ComptimeFarbe.init();
-
-    var farb_runtime = farb.runtime(std.testing.allocator);
-    defer farb_runtime.deinit();
-    try farb_runtime.italic();
-    try farb_runtime.bold();
+    const farb = comptime Farbe.init();
+    const farb_runtime = farb.italic().bold();
 
     const opener = try farb_runtime.open(std.testing.allocator);
     defer std.testing.allocator.free(opener);
 
-    try std.testing.expectEqualSlices(u8, &.{
-        0x1B, 0x5B, 0x33, 0x6D, 0x1B, 0x5B, 0x31, 0x6D,
-    }, opener);
+    try std.testing.expectEqualSlices(
+        u8,
+        &.{ 0x1B, 0x5B, 0x31, 0x6D, 0x1B, 0x5B, 0x33, 0x6D },
+        opener,
+    );
 }
 
 test "writing" {
     var list = std.ArrayList(u8).init(std.testing.allocator);
     defer list.deinit();
 
-    var farb = Farbe.init(std.testing.allocator);
-    defer farb.deinit();
-
-    try farb.italic();
-    try farb.bold();
+    var farb = Farbe.init().italic().bold();
 
     try farb.write(list.writer(), "{s}", .{"test"});
     try std.testing.expectEqualSlices(u8, &.{
-        0x1B, 0x5B, 0x33, 0x6D, 0x1B, 0x5B, 0x31, 0x6D,
+        0x1B, 0x5B, 0x31, 0x6D, 0x1B, 0x5B, 0x33, 0x6D,
         0x74, 0x65, 0x73, 0x74, 0x1B, 0x5B, 0x32, 0x32,
         0x6D,
     }, list.items);
 }
 
 test "comptime to fixed" {
-    const farb = comptime ComptimeFarbe.init().italic().bold();
+    const farb = comptime Farbe.init().italic().bold();
 
-    var farb_runtime = farb.fixed();
-    defer farb_runtime.deinit();
-
-    const opener = try farb_runtime.open(std.testing.allocator);
+    const opener = try farb.open(std.testing.allocator);
     defer std.testing.allocator.free(opener);
 
     try std.testing.expectEqualSlices(u8, &.{
-        0x1B, 0x5B, 0x33, 0x6D, 0x1B, 0x5B, 0x31, 0x6D,
+        0x1B, 0x5B, 0x31, 0x6D, 0x1B, 0x5B, 0x33, 0x6D,
     }, opener);
-
-    const outcome = farb_runtime.dim() catch |err| err;
-    try std.testing.expectEqual(outcome, Farbe.Error.NoStack);
 }

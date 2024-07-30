@@ -1,7 +1,7 @@
 const std = @import("std");
 const farbe = @import("farbe");
 
-const TermInfo = std.os.termios;
+const TermInfo = std.posix.termios;
 
 const ESCAPE = 27; // escape code
 const ARROW_UP = 'A';
@@ -37,11 +37,11 @@ const Input = union(enum) {
 
 const TtyFd = struct {
     file: std.fs.File,
-    original: std.os.termios,
-    current: std.os.termios,
+    original: std.posix.termios,
+    current: std.posix.termios,
 
-    fn setTerm(handle: std.fs.File.Handle, term: std.os.termios) !void {
-        try std.os.tcsetattr(handle, .NOW, term);
+    fn setTerm(handle: std.fs.File.Handle, term: std.posix.termios) !void {
+        try std.posix.tcsetattr(handle, .NOW, term);
     }
 
     pub fn deinit(tf: *TtyFd) void {
@@ -50,7 +50,7 @@ const TtyFd = struct {
     }
 
     pub fn init(file: std.fs.File) !TtyFd {
-        const original = try std.os.tcgetattr(file.handle);
+        const original = try std.posix.tcgetattr(file.handle);
         var current = original;
 
         // local: no echo, canonical mode, remove signals
@@ -61,7 +61,7 @@ const TtyFd = struct {
         current.iflag.ICRNL = false;
 
         // return read after each byte is sent
-        current.cc[@intFromEnum(std.os.linux.V.MIN)] = 1;
+        current.cc[@intFromEnum(std.posix.V.MIN)] = 1;
         try setTerm(file.handle, current);
 
         return .{ .file = file, .original = original, .current = current };
@@ -103,7 +103,7 @@ const TermUI = struct {
     }
 
     pub fn getSize(tui: *TermUI) usize {
-        return std.os.linux.ioctl(tui.handle, std.os.linux.T.IOCGWINSZ, 0);
+        return std.posix.ioctl(tui.handle, std.posix.T.IOCGWINSZ, 0);
     }
 
     pub fn init(
@@ -224,7 +224,7 @@ const Picker = struct {
             if (i % 3 == 0) try writer.writeByte(' ');
             if (with_cursor and i == p.cursor_pos) {
                 // write with colours
-                const color = farbe.ComptimeFarbe.init().bgRgb(255, 255, 255).fgRgb(0, 0, 0).fixed();
+                const color = farbe.Farbe.init().bgRgb(255, 255, 255).fgRgb(0, 0, 0);
                 try color.write(writer, "{d}", .{d});
             } else {
                 try writer.print("{d}", .{d});
@@ -234,11 +234,10 @@ const Picker = struct {
         try writer.writeByteNTimes(' ', 3);
 
         const values = p.readValues();
-        var f = farbe.Farbe.init(p.allocator);
-        defer f.deinit();
+        var f = farbe.Farbe.init();
         try writer.writeByteNTimes(' ', 3);
 
-        try f.fgRgb(values[0], values[1], values[2]);
+        f = f.fgRgb(values[0], values[1], values[2]);
 
         try f.write(writer, "██", .{});
         try writer.writeByte(' ');
