@@ -124,8 +124,6 @@ pub const Farbe = struct {
                     "\u{001B}[{d}m",
                     .{AnsiStyleFormatMap.get(field.name).?.cl},
                 );
-                // only need one closing reset
-                return;
             }
         }
     }
@@ -303,8 +301,12 @@ test "writing" {
     try farb.write(list.writer(), "{s}", .{"test"});
     try std.testing.expectEqualSlices(u8, &.{
         0x1B, 0x5B, 0x31, 0x6D, 0x1B, 0x5B, 0x33, 0x6D,
-        0x74, 0x65, 0x73, 0x74, 0x1B, 0x5B, 0x32, 0x32,
+        0x74, 0x65, 0x73, 0x74,
+        // first closing tag
+        0x1B, 0x5B, 0x32, 0x32,
         0x6D,
+        // second closing tag
+        0x1B, 0x5B, 0x32, 0x33, 0x6D,
     }, list.items);
 }
 

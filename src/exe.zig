@@ -27,6 +27,11 @@ fn colorTest() !void {
         try c1.write(writer, "Bg White Fb Black Underlined", .{});
     }
     try writer.writeAll(" Reset\n");
+    {
+        var c1 = farbe.Farbe.init().dim().italic();
+        try c1.write(writer, "Dim Italics", .{});
+    }
+    try writer.writeAll(" Reset\n");
 }
 
 pub fn main() !void {
