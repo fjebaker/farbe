@@ -95,7 +95,7 @@ pub const Farbe = struct {
     }
 
     pub fn writeOpen(f: Farbe, writer: anytype) !void {
-        inline for (@typeInfo(Style).Struct.fields) |field| {
+        inline for (@typeInfo(Style).@"struct".fields) |field| {
             if (@field(f.style, field.name)) {
                 try writer.print(
                     "\u{001B}[{d}m",
@@ -118,7 +118,7 @@ pub const Farbe = struct {
         if (f.bg) |_| {
             try writer.writeAll("\u{001B}[49m");
         }
-        inline for (@typeInfo(Style).Struct.fields) |field| {
+        inline for (@typeInfo(Style).@"struct".fields) |field| {
             if (@field(f.style, field.name)) {
                 try writer.print(
                     "\u{001B}[{d}m",
@@ -136,7 +136,7 @@ fn StyleMixin(comptime Self: type) type {
     return struct {
         inline fn styleWrapper(f: Self, style: Style) Self {
             var s: Style = f.style;
-            inline for (@typeInfo(Style).Struct.fields) |field| {
+            inline for (@typeInfo(Style).@"struct".fields) |field| {
                 @field(s, field.name) =
                     @field(s, field.name) or @field(style, field.name);
             }
