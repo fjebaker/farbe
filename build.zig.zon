@@ -1,5 +1,6 @@
 .{
-    .name = "farbe",
+    .name = .farbe,
+    .fingerprint = 0x6eacc55a2fd06a02,
     .paths = .{""},
     .version = "0.3.0",
 }
