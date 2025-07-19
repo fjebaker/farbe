@@ -128,94 +128,82 @@ pub const Farbe = struct {
         }
     }
 
-    pub usingnamespace StyleMixin(Farbe);
-    pub usingnamespace OuputMixin(Farbe);
+    inline fn styleWrapper(f: Farbe, style: Style) Farbe {
+        var s: Style = f.style;
+        inline for (@typeInfo(Style).@"struct".fields) |field| {
+            @field(s, field.name) =
+                @field(s, field.name) or @field(style, field.name);
+        }
+
+        var new = f;
+        new.style = s;
+        return new;
+    }
+
+    pub inline fn reset(f: Farbe) Farbe {
+        return styleWrapper(f, .{ .reset = true });
+    }
+
+    pub inline fn bold(f: Farbe) Farbe {
+        return styleWrapper(f, .{ .bold = true });
+    }
+
+    pub inline fn dim(f: Farbe) Farbe {
+        return styleWrapper(f, .{ .dim = true });
+    }
+
+    pub inline fn italic(f: Farbe) Farbe {
+        return styleWrapper(f, .{ .italic = true });
+    }
+
+    pub inline fn underlined(f: Farbe) Farbe {
+        return styleWrapper(f, .{ .underlined = true });
+    }
+
+    pub inline fn inverse(f: Farbe) Farbe {
+        return styleWrapper(f, .{ .inverse = true });
+    }
+
+    pub inline fn hidden(f: Farbe) Farbe {
+        return styleWrapper(f, .{ .hidden = true });
+    }
+
+    pub inline fn strikethrough(f: Farbe) Farbe {
+        return styleWrapper(f, Style.STRIKETHROUGH);
+    }
+
+    pub inline fn overline(f: Farbe) Farbe {
+        return styleWrapper(f, Style.OVERLINE);
+    }
+    /// Caller owns memory.
+    pub fn open(f: Farbe, allocator: std.mem.Allocator) ![]const u8 {
+        var buf = std.ArrayList(u8).init(allocator);
+        const writer = buf.writer();
+        try f.writeOpen(writer);
+        return buf.toOwnedSlice();
+    }
+
+    /// Caller owns memory.
+    pub fn close(f: Farbe, allocator: std.mem.Allocator) ![]const u8 {
+        var buf = std.ArrayList(u8).init(allocator);
+        const writer = buf.writer();
+        try f.writeclose(writer);
+        return buf.toOwnedSlice();
+    }
+
+    // Writes the formatted text using the current colour and style
+    // configuration.
+    pub fn write(
+        f: Farbe,
+        writer: anytype,
+        comptime fmt: []const u8,
+        args: anytype,
+    ) !void {
+        try f.writeOpen(writer);
+        try writer.print(fmt, args);
+        try f.writeClose(writer);
+    }
 };
-
-fn StyleMixin(comptime Self: type) type {
-    return struct {
-        inline fn styleWrapper(f: Self, style: Style) Self {
-            var s: Style = f.style;
-            inline for (@typeInfo(Style).@"struct".fields) |field| {
-                @field(s, field.name) =
-                    @field(s, field.name) or @field(style, field.name);
-            }
-
-            var new = f;
-            new.style = s;
-            return new;
-        }
-
-        pub inline fn reset(f: Self) Self {
-            return styleWrapper(f, .{ .reset = true });
-        }
-
-        pub inline fn bold(f: Self) Self {
-            return styleWrapper(f, .{ .bold = true });
-        }
-
-        pub inline fn dim(f: Self) Self {
-            return styleWrapper(f, .{ .dim = true });
-        }
-
-        pub inline fn italic(f: Self) Self {
-            return styleWrapper(f, .{ .italic = true });
-        }
-
-        pub inline fn underlined(f: Self) Self {
-            return styleWrapper(f, .{ .underlined = true });
-        }
-
-        pub inline fn inverse(f: Self) Self {
-            return styleWrapper(f, .{ .inverse = true });
-        }
-
-        pub inline fn hidden(f: Self) Self {
-            return styleWrapper(f, .{ .hidden = true });
-        }
-
-        pub inline fn strikethrough(f: Self) Self {
-            return styleWrapper(f, Style.STRIKETHROUGH);
-        }
-
-        pub inline fn overline(f: Self) Self {
-            return styleWrapper(f, Style.OVERLINE);
-        }
-    };
-}
-
-fn OuputMixin(comptime Self: type) type {
-    return struct {
-        /// Caller owns memory.
-        pub fn open(f: Self, allocator: std.mem.Allocator) ![]const u8 {
-            var buf = std.ArrayList(u8).init(allocator);
-            const writer = buf.writer();
-            try f.writeOpen(writer);
-            return buf.toOwnedSlice();
-        }
-
-        /// Caller owns memory.
-        pub fn close(f: Self, allocator: std.mem.Allocator) ![]const u8 {
-            var buf = std.ArrayList(u8).init(allocator);
-            const writer = buf.writer();
-            try f.writeclose(writer);
-            return buf.toOwnedSlice();
-        }
-
-        // Writes the formatted text using the current colour and style
-        // configuration.
-        pub fn write(
-            f: Self,
-            writer: anytype,
-            comptime fmt: []const u8,
-            args: anytype,
-        ) !void {
-            try f.writeOpen(writer);
-            try writer.print(fmt, args);
-            try f.writeClose(writer);
-        }
-    };
-}
 
 fn testEqualCode(
     comptime expected: []const u8,

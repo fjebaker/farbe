@@ -2,7 +2,8 @@ const std = @import("std");
 const farbe = @import("farbe");
 
 fn colorTest() !void {
-    var writer = std.io.getStdOut().writer();
+    var stderr = std.fs.File.stderr().writer(&.{});
+    var writer = &stderr.interface;
 
     try writer.writeAll("Comptime Color Test\n");
     {
@@ -57,13 +58,14 @@ pub fn main() !void {
     const b = try std.fmt.parseInt(u8, args.next() orelse "0", 10);
 
     if (args.next()) |_| {
-        try std.io.getStdErr().writeAll("Too many arguments. Expected 3.\n");
+        try std.fs.File.stderr().writeAll("Too many arguments. Expected 3.\n");
         std.process.exit(1);
     }
     var color = farbe.Farbe.init();
 
     color = color.fgRgb(r, g, b);
-    var stdout = std.io.getStdOut().writer();
+    var stdout_writer = std.fs.File.stdout().writer(&.{});
+    const stdout = &stdout_writer.interface;
     try stdout.print("R {} G {} B {}\n", .{ r, g, b });
     try color.write(stdout, "██", .{});
     try stdout.writeAll(" ");
