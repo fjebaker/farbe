@@ -20,7 +20,7 @@ fn formatAnsi(
 }
 
 fn writeAnsi(
-    writer: anytype,
+    writer: *std.Io.Writer,
     bg: bool,
     r: u8,
     g: u8,
@@ -94,7 +94,7 @@ pub const Farbe = struct {
         f.style = s;
     }
 
-    pub fn writeOpen(f: Farbe, writer: anytype) !void {
+    pub fn writeOpen(f: Farbe, writer: *std.Io.Writer) !void {
         inline for (@typeInfo(Style).@"struct".fields) |field| {
             if (@field(f.style, field.name)) {
                 try writer.print(
@@ -111,7 +111,7 @@ pub const Farbe = struct {
         }
     }
 
-    pub fn writeClose(f: Farbe, writer: anytype) !void {
+    pub fn writeClose(f: Farbe, writer: *std.Io.Writer) !void {
         if (f.fg) |_| {
             try writer.writeAll("\u{001B}[39m");
         }
@@ -177,25 +177,27 @@ pub const Farbe = struct {
     }
     /// Caller owns memory.
     pub fn open(f: Farbe, allocator: std.mem.Allocator) ![]const u8 {
-        var buf = std.ArrayList(u8).init(allocator);
-        const writer = buf.writer();
-        try f.writeOpen(writer);
-        return buf.toOwnedSlice();
+        var buf = std.ArrayList(u8).empty;
+        defer buf.deinit(allocator);
+        var writer = buf.writer(allocator).adaptToNewApi(&.{});
+        try f.writeOpen(&writer.new_interface);
+        return buf.toOwnedSlice(allocator);
     }
 
     /// Caller owns memory.
     pub fn close(f: Farbe, allocator: std.mem.Allocator) ![]const u8 {
-        var buf = std.ArrayList(u8).init(allocator);
-        const writer = buf.writer();
-        try f.writeclose(writer);
-        return buf.toOwnedSlice();
+        var buf = std.ArrayList(u8).empty;
+        defer buf.deinit(allocator);
+        var writer = buf.writer(allocator).adaptToNewApi(&.{});
+        try f.writeClose(&writer.new_interface);
+        return buf.toOwnedSlice(allocator);
     }
 
     // Writes the formatted text using the current colour and style
     // configuration.
     pub fn write(
         f: Farbe,
-        writer: anytype,
+        writer: *std.Io.Writer,
         comptime fmt: []const u8,
         args: anytype,
     ) !void {
@@ -210,13 +212,15 @@ fn testEqualCode(
     farb: Farbe,
     what: enum { open, close, full },
 ) !void {
-    var buf = std.ArrayList(u8).init(std.testing.allocator);
-    defer buf.deinit();
+    var buf = std.ArrayList(u8).empty;
+    defer buf.deinit(std.testing.allocator);
+
+    var writer = buf.writer(std.testing.allocator).adaptToNewApi(&.{});
 
     try switch (what) {
-        .open => farb.writeOpen(buf.writer()),
-        .close => farb.writeClose(buf.writer()),
-        .full => farb.write(buf.writer(), "", .{}),
+        .open => farb.writeOpen(&writer.new_interface),
+        .close => farb.writeClose(&writer.new_interface),
+        .full => farb.write(&writer.new_interface, "", .{}),
     };
 
     try std.testing.expectEqualSlices(
@@ -281,12 +285,14 @@ test "comptime to runtime" {
 }
 
 test "writing" {
-    var list = std.ArrayList(u8).init(std.testing.allocator);
-    defer list.deinit();
+    var list = std.ArrayList(u8).empty;
+    defer list.deinit(std.testing.allocator);
+
+    var writer = list.writer(std.testing.allocator).adaptToNewApi(&.{});
 
     var farb = Farbe.init().italic().bold();
 
-    try farb.write(list.writer(), "{s}", .{"test"});
+    try farb.write(&writer.new_interface, "{s}", .{"test"});
     try std.testing.expectEqualSlices(u8, &.{
         0x1B, 0x5B, 0x31, 0x6D, 0x1B, 0x5B, 0x33, 0x6D,
         0x74, 0x65, 0x73, 0x74,
