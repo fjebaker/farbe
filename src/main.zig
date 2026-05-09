@@ -177,20 +177,18 @@ pub const Farbe = struct {
     }
     /// Caller owns memory.
     pub fn open(f: Farbe, allocator: std.mem.Allocator) ![]const u8 {
-        var buf = std.ArrayList(u8).empty;
-        defer buf.deinit(allocator);
-        var writer = buf.writer(allocator).adaptToNewApi(&.{});
-        try f.writeOpen(&writer.new_interface);
-        return buf.toOwnedSlice(allocator);
+        var writer = std.Io.Writer.Allocating.init(allocator);
+        defer writer.deinit();
+        try f.writeOpen(&writer.writer);
+        return writer.toOwnedSlice();
     }
 
     /// Caller owns memory.
     pub fn close(f: Farbe, allocator: std.mem.Allocator) ![]const u8 {
-        var buf = std.ArrayList(u8).empty;
-        defer buf.deinit(allocator);
-        var writer = buf.writer(allocator).adaptToNewApi(&.{});
-        try f.writeClose(&writer.new_interface);
-        return buf.toOwnedSlice(allocator);
+        var writer = std.Io.Writer.Allocating.init(allocator);
+        defer writer.deinit();
+        try f.writeClose(&writer.writer);
+        return writer.toOwnedSlice();
     }
 
     // Writes the formatted text using the current colour and style
@@ -212,21 +210,19 @@ fn testEqualCode(
     farb: Farbe,
     what: enum { open, close, full },
 ) !void {
-    var buf = std.ArrayList(u8).empty;
-    defer buf.deinit(std.testing.allocator);
-
-    var writer = buf.writer(std.testing.allocator).adaptToNewApi(&.{});
+    var writer = std.Io.Writer.Allocating.init(std.testing.allocator);
+    defer writer.deinit();
 
     try switch (what) {
-        .open => farb.writeOpen(&writer.new_interface),
-        .close => farb.writeClose(&writer.new_interface),
-        .full => farb.write(&writer.new_interface, "", .{}),
+        .open => farb.writeOpen(&writer.writer),
+        .close => farb.writeClose(&writer.writer),
+        .full => farb.write(&writer.writer, "", .{}),
     };
 
     try std.testing.expectEqualSlices(
         u8,
         expected,
-        buf.items,
+        writer.written(),
     );
 }
 
@@ -285,14 +281,12 @@ test "comptime to runtime" {
 }
 
 test "writing" {
-    var list = std.ArrayList(u8).empty;
-    defer list.deinit(std.testing.allocator);
-
-    var writer = list.writer(std.testing.allocator).adaptToNewApi(&.{});
+    var writer = std.Io.Writer.Allocating.init(std.testing.allocator);
+    defer writer.deinit();
 
     var farb = Farbe.init().italic().bold();
 
-    try farb.write(&writer.new_interface, "{s}", .{"test"});
+    try farb.write(&writer.writer, "{s}", .{"test"});
     try std.testing.expectEqualSlices(u8, &.{
         0x1B, 0x5B, 0x31, 0x6D, 0x1B, 0x5B, 0x33, 0x6D,
         0x74, 0x65, 0x73, 0x74,
@@ -301,7 +295,7 @@ test "writing" {
         0x6D,
         // second closing tag
         0x1B, 0x5B, 0x32, 0x33, 0x6D,
-    }, list.items);
+    }, writer.written());
 }
 
 test "comptime to fixed" {
